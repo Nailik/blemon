@@ -1,31 +1,87 @@
 if (Java.available) {
-    Java.perform(function () {
-        var BTGattCB = Java.use("android.bluetooth.BluetoothGattCallback");
-        // https://github.com/frida/frida/issues/310#issuecomment-462447292
-        BTGattCB.$init.overload().implementation = function () {
-            console.log("[+] BluetoothGattCallback constructor called from " + this.$className);
-            const NewCB = Java.use(this.$className);
-            NewCB.onCharacteristicRead.implementation = function (g, c, s) {
-                const retVal = NewCB.onCharacteristicRead.call(this, g, c, s);
-                var uuid = c.getUuid();
-                console.log(Color.Blue + "[BLE Read   <=]" + Color.Light.Black + " UUID: " + uuid.toString() + Color.Reset + " data: 0x" + bytes2hex(c.getValue()));
-                return retVal;
-            };
-            NewCB.onCharacteristicWrite.implementation = function (g, c, s) {
-                const retVal = NewCB.onCharacteristicWrite.call(this, g, c, s);
-                var uuid = c.getUuid();
-                console.log(Color.Green + "[BLE Write  =>]" + Color.Light.Black + " UUID: " + uuid.toString() + Color.Reset + " data: 0x" + bytes2hex(c.getValue()));
-                return retVal;
-            };
-            NewCB.onCharacteristicChanged.implementation = function (g, c) {
-                const retVal = NewCB.onCharacteristicChanged.call(this, g, c);
-                var uuid = c.getUuid();
-                console.log(Color.Cyan + "[BLE Notify <=]" + Color.Light.Black + " UUID: " + uuid.toString() + Color.Reset + " data: 0x" + bytes2hex(c.getValue()));
-                return retVal;
-            };
-            return this.$init();
-        };
+     console.log("Startup");
 
+    Java.perform(function () {
+        var BluetoothGatt = Java.use("android.bluetooth.BluetoothGatt");
+        var BluetoothGattCallback = Java.use("android.bluetooth.BluetoothGattCallback") //replace this with your custom gatt callback
+
+        //https://developer.android.com/reference/android/bluetooth/BluetoothGatt#writeCharacteristic(android.bluetooth.BluetoothGattCharacteristic)
+        //deprecated
+        BluetoothGatt.writeCharacteristic
+                    .overload('android.bluetooth.BluetoothGattCharacteristic')
+                    .implementation = function (characteristic) {
+                        var uuid = characteristic.getUuid();
+                        var data = bytes2hex(characteristic.getValue());
+                        console.log(Color.Green + "[BLE Write =>]" + " UUID: " + uuid.toString() + Color.Reset + " data: 0x " + data);
+                        return BluetoothGatt.writeCharacteristic
+                            .overload('android.bluetooth.BluetoothGattCharacteristic')
+                            .call(this, characteristic)
+                };
+
+        //https://developer.android.com/reference/android/bluetooth/BluetoothGatt#writeCharacteristic(android.bluetooth.BluetoothGattCharacteristic,%20byte[],%20int)
+        BluetoothGatt.writeCharacteristic
+                .overload('android.bluetooth.BluetoothGattCharacteristic', '[B', 'int')
+                .implementation = function (characteristic, value, writeType) {
+                    var uuid = characteristic.getUuid();
+                    var data = bytes2hex(value);
+                    console.log(Color.Green + "[BLE Write =>]" + " UUID: " + uuid.toString() + Color.Reset + " data: 0x " + data + " | writeType : " + writeType);
+                    return BluetoothGatt.writeCharacteristic
+                        .overload('android.bluetooth.BluetoothGattCharacteristic', '[B', 'int')
+                        .call(this, characteristic, value, writeType)
+            };
+
+        //https://developer.android.com/reference/android/bluetooth/BluetoothGatt#readCharacteristic(android.bluetooth.BluetoothGattCharacteristic)
+        BluetoothGatt.readCharacteristic
+                .overload('android.bluetooth.BluetoothGattCharacteristic')
+                .implementation = function (characteristic) {
+                    var result = BluetoothGatt.readCharacteristic
+                        .overload('android.bluetooth.BluetoothGattCharacteristic')
+                        .call(this, characteristic)
+                    var uuid = characteristic.getUuid();
+                    var data = bytes2hex(characteristic.getValue());
+                    console.log(Color.Blue + "[BLE Read <=]" + " UUID: " + uuid.toString() + Color.Reset + " data: 0x " + data + " | result: " + result);
+                   return result
+            };
+
+        // https://developer.android.com/reference/android/bluetooth/BluetoothGattCallback#onCharacteristicRead(android.bluetooth.BluetoothGatt,%20android.bluetooth.BluetoothGattCharacteristic,%20byte[],%20int)
+        BluetoothGattCallback.onCharacteristicRead
+            .overload('android.bluetooth.BluetoothGatt', 'android.bluetooth.BluetoothGattCharacteristic', '[B', 'int')
+            .implementation = function (gatt, characteristic, value, status) {
+                var uuid = characteristic.getUuid();
+                var data = bytes2hex(value);
+                console.log(Color.Blue + "[BLE Read <=]" + " UUID: " + uuid.toString() + Color.Reset + " data: 0x " + data + " | status: " + status);
+
+                return this.onCharacteristicRead(gatt, characteristic, value, status);
+            };
+
+        // https://developer.android.com/reference/android/bluetooth/BluetoothGattCallback#onCharacteristicRead(android.bluetooth.BluetoothGatt,%20android.bluetooth.BluetoothGattCharacteristic,%20int)
+        //deprecated
+        BluetoothGattCallback.onCharacteristicRead
+            .overload('android.bluetooth.BluetoothGatt', 'android.bluetooth.BluetoothGattCharacteristic', 'int')
+            .implementation = function (gatt, characteristic, status) {
+            var uuid = characteristic.getUuid();
+            var data = bytes2hex(characteristic.getValue());
+                console.log(Color.Blue + "[BLE Read <=]" + " UUID: " + uuid.toString() + Color.Reset + " data: 0x " + data + " | status: " + status);
+
+            return this.onCharacteristicChanged(gatt, characteristic, status);
+        };
+            BTGattCB.onCharacteristicChanged
+                .overload('android.bluetooth.BluetoothGatt', 'android.bluetooth.BluetoothGattCharacteristic')
+                .implementation = function (g, c) {
+                    console.log(Color.Cyan + "[BLE Notify   <=]");
+                    var uuid = c.getUuid();
+                    var data = bytes2hex(c.getValue());
+                    console.log(Color.Cyan + "[BLE Notify <=]" + Color.Light.Black + " UUID: " + uuid.toString() + Color.Reset + " data: 0x" + data + Color.Light.Blue);
+                    return this.onCharacteristicChanged.call(g, c);
+            };
+            BTGattCB.onCharacteristicChanged
+                .overload('android.bluetooth.BluetoothGatt', 'android.bluetooth.BluetoothGattCharacteristic', '[B')
+                .implementation = function (g, c, b) {
+                    var uuid = c.getUuid();
+                    var data = bytes2hex(b);
+                    console.log(Color.Cyan + "[BLE Notify <=]" + " UUID: " + uuid.toString() + Color.Reset + " data: 0x" + data + Color.Light.Blue);
+                    return BTGattCB.onCharacteristicChanged.call(this, g, c, b);
+                };
     }); // end perform
 } else if (ObjC.available) {
     Interceptor.attach(ObjC.classes.CBPeripheral['- writeValue:forCharacteristic:type:'].implementation, {
@@ -68,12 +124,16 @@ var Color = {
     }
 };
 // thanks: https://awakened1712.github.io/hacking/hacking-frida/
-function bytes2hex(array) {
-    var result = '';
-    for (var i = 0; i < array.length; ++i)
-        result += ('0' + (array[i] & 0xFF).toString(16)).slice(-2);
-    return result;
-};
+function bytes2hex(bytes) {
+        if (!bytes) return "";
+        var result = [];
+        for (var i = 0; i < bytes.length; i++) {
+            var byte = (bytes[i] & 0xFF).toString(16);
+            if (byte.length === 1) byte = "0" + byte;
+            result.push(byte);
+        }
+        return result.join(" "); // whitespace between bytes
+    }
 function pad(num, size) {
     var s = num + "";
     while (s.length < size) s = "0" + s;
