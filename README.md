@@ -4,9 +4,9 @@ Universal BLE Monitoring with Frida (or Objection)
 The standalone script can be used directly with [Frida](https://www.frida.re) in order to monitor basic BLE traffic between a mobile device (central) and a BLE peripheral. Characteristic reads, writes and notifications are supported for both Android and iOS.
 
 ## Usage
-`adb root`
-`adb shell "/data/local/tmp/frida-server &"`
-`frida -U -l blemon_2.js -f your.package`
+- `adb root`
+- `adb shell "/data/local/tmp/frida-server &"`
+- `frida -U -l blemon_2.js -f your.package`
 
 ## Screenshots
 ![android_plugin](images/android_plugin.png)
