@@ -1,119 +1,108 @@
 if (Java.available) {
-     console.log("Startup");
 
     Java.perform(function () {
-        var BluetoothGatt = Java.use("android.bluetooth.BluetoothGatt");
-        var BluetoothGattCallback = Java.use("android.bluetooth.BluetoothGattCallback") //replace this with your custom gatt callback
+
+    var BluetoothGatt = Java.use("android.bluetooth.BluetoothGatt");
+    var BluetoothGattCallback = Java.use("android.bluetooth.BluetoothGattCallback")
+       // Hook BluetoothDevice.connectGatt overloads to capture callbacks passed as args
+
+    console.log("[*] Script loaded — waiting for BluetoothGattCallback instances or connectGatt calls.");
 
         //https://developer.android.com/reference/android/bluetooth/BluetoothGatt#writeCharacteristic(android.bluetooth.BluetoothGattCharacteristic)
         //deprecated
-        BluetoothGatt.writeCharacteristic
-                    .overload('android.bluetooth.BluetoothGattCharacteristic')
-                    .implementation = function (characteristic) {
-                        var uuid = characteristic.getUuid();
-                        var data = bytes2hex(characteristic.getValue());
-                        console.log(Color.Green + "[BLE Write =>]" + " UUID: " + uuid.toString() + Color.Reset + " data: 0x " + data);
-                        return BluetoothGatt.writeCharacteristic
-                            .overload('android.bluetooth.BluetoothGattCharacteristic')
-                            .call(this, characteristic)
+        try {
+            BluetoothGatt.writeCharacteristic
+                .overload('android.bluetooth.BluetoothGattCharacteristic')
+                .implementation = function (characteristic) {
+                    var uuid = characteristic.getUuid();
+                    var data = bytes2hex(characteristic.getValue());
+                    console.log(Color.Green + "[BLE Write (deprecated) =>]" + " UUID: " + uuid.toString() + Color.Reset + " data: 0x " + data);
+                    return this.writeCharacteristic(characteristic);
                 };
+        } catch (error) {
+            // Code that runs if an error happens
+            console.error("Unable to implement writeCharacteristic with characteristic:", error.message);
+        }
 
         //https://developer.android.com/reference/android/bluetooth/BluetoothGatt#writeCharacteristic(android.bluetooth.BluetoothGattCharacteristic,%20byte[],%20int)
-        BluetoothGatt.writeCharacteristic
+        try {
+            BluetoothGatt.writeCharacteristic
                 .overload('android.bluetooth.BluetoothGattCharacteristic', '[B', 'int')
                 .implementation = function (characteristic, value, writeType) {
                     var uuid = characteristic.getUuid();
                     var data = bytes2hex(value);
                     console.log(Color.Green + "[BLE Write =>]" + " UUID: " + uuid.toString() + Color.Reset + " data: 0x " + data + " | writeType : " + writeType);
-                    return BluetoothGatt.writeCharacteristic
-                        .overload('android.bluetooth.BluetoothGattCharacteristic', '[B', 'int')
-                        .call(this, characteristic, value, writeType)
-            };
-
-        //https://developer.android.com/reference/android/bluetooth/BluetoothGatt#readCharacteristic(android.bluetooth.BluetoothGattCharacteristic)
-        BluetoothGatt.readCharacteristic
-                .overload('android.bluetooth.BluetoothGattCharacteristic')
-                .implementation = function (characteristic) {
-                    var result = BluetoothGatt.readCharacteristic
-                        .overload('android.bluetooth.BluetoothGattCharacteristic')
-                        .call(this, characteristic)
-                    var uuid = characteristic.getUuid();
-                    var data = bytes2hex(characteristic.getValue());
-                    console.log(Color.Blue + "[BLE Read <=]" + " UUID: " + uuid.toString() + Color.Reset + " data: 0x " + data + " | result: " + result);
-                   return result
-            };
+                    return this.writeCharacteristic(characteristic, value, writeType);
+                };
+        } catch (error) {
+            // Code that runs if an error happens
+            console.error("Unable to implement writeCharacteristic with characteristic, value, writeType:", error.message);
+        }
 
         // https://developer.android.com/reference/android/bluetooth/BluetoothGattCallback#onCharacteristicRead(android.bluetooth.BluetoothGatt,%20android.bluetooth.BluetoothGattCharacteristic,%20byte[],%20int)
-        BluetoothGattCallback.onCharacteristicRead
+        try {
+            BluetoothGattCallback.onCharacteristicRead
             .overload('android.bluetooth.BluetoothGatt', 'android.bluetooth.BluetoothGattCharacteristic', '[B', 'int')
             .implementation = function (gatt, characteristic, value, status) {
                 var uuid = characteristic.getUuid();
                 var data = bytes2hex(value);
-                console.log(Color.Blue + "[BLE Read <=]" + " UUID: " + uuid.toString() + Color.Reset + " data: 0x " + data + " | status: " + status);
-
+                console.log(Color.Blue + "[BLE Read <=]" + " UUID: " + uuid.toString() + Color.Reset + " data: 0x " + data); 
                 return this.onCharacteristicRead(gatt, characteristic, value, status);
             };
+        } catch (error) {
+            // Code that runs if an error happens
+            console.error("Unable to implement onCharacteristicRead with gatt, characteristic, value, status:", error.message);
+        }
 
         // https://developer.android.com/reference/android/bluetooth/BluetoothGattCallback#onCharacteristicRead(android.bluetooth.BluetoothGatt,%20android.bluetooth.BluetoothGattCharacteristic,%20int)
         //deprecated
-        BluetoothGattCallback.onCharacteristicRead
-            .overload('android.bluetooth.BluetoothGatt', 'android.bluetooth.BluetoothGattCharacteristic', 'int')
-            .implementation = function (gatt, characteristic, status) {
-            var uuid = characteristic.getUuid();
-            var data = bytes2hex(characteristic.getValue());
-                console.log(Color.Blue + "[BLE Read <=]" + " UUID: " + uuid.toString() + Color.Reset + " data: 0x " + data + " | status: " + status);
-
-            return this.onCharacteristicChanged(gatt, characteristic, status);
-        };
-            BTGattCB.onCharacteristicChanged
-                .overload('android.bluetooth.BluetoothGatt', 'android.bluetooth.BluetoothGattCharacteristic')
-                .implementation = function (g, c) {
-                    console.log(Color.Cyan + "[BLE Notify   <=]");
-                    var uuid = c.getUuid();
-                    var data = bytes2hex(c.getValue());
-                    console.log(Color.Cyan + "[BLE Notify <=]" + Color.Light.Black + " UUID: " + uuid.toString() + Color.Reset + " data: 0x" + data + Color.Light.Blue);
-                    return this.onCharacteristicChanged.call(g, c);
-            };
-            BTGattCB.onCharacteristicChanged
-                .overload('android.bluetooth.BluetoothGatt', 'android.bluetooth.BluetoothGattCharacteristic', '[B')
-                .implementation = function (g, c, b) {
-                    var uuid = c.getUuid();
-                    var data = bytes2hex(b);
-                    console.log(Color.Cyan + "[BLE Notify <=]" + " UUID: " + uuid.toString() + Color.Reset + " data: 0x" + data + Color.Light.Blue);
-                    return BTGattCB.onCharacteristicChanged.call(this, g, c, b);
+        try {
+            BluetoothGattCallback.onCharacteristicRead
+                .overload('android.bluetooth.BluetoothGatt', 'android.bluetooth.BluetoothGattCharacteristic', 'int')
+                .implementation = function (gatt, characteristic, status) {
+                    var uuid = characteristic.getUuid();
+                    var data = bytes2hex(characteristic.getValue());
+                    console.log(Color.Blue + "[BLE Read (deprecated) <=]" + " UUID: " + uuid.toString() + Color.Reset + " data: 0x " + data);
+                    return this.onCharacteristicRead(gatt, characteristic, status);
                 };
+        } catch (error) {
+            // Code that runs if an error happens
+            console.error("Unable to implement onCharacteristicRead with gatt, characteristic, status:", error.message);
+        }
+
+        //https://developer.android.com/reference/android/bluetooth/BluetoothGattCallback#onCharacteristicChanged(android.bluetooth.BluetoothGatt,%20android.bluetooth.BluetoothGattCharacteristic)
+        //deprecated
+        try {
+            BluetoothGattCallback.onCharacteristicChanged
+                .overload('android.bluetooth.BluetoothGatt', 'android.bluetooth.BluetoothGattCharacteristic')
+                .implementation = function (gatt, characteristic) {
+                    var uuid = characteristic.getUuid();
+                    var data = bytes2hex(characteristic.getValue());
+                    console.log(Color.Cyan + "[BLE Notify (deprecated) <=]" + " UUID: " + uuid.toString() + Color.Reset + " data: 0x" + data + Color.Light.Blue);
+                    return this.onCharacteristicChanged(gatt, characteristic);
+                };
+        } catch (error) {
+            // Code that runs if an error happens
+            console.error("Unable to implement writeCharacteristic with characteristic:", error.message);
+        }
+        
+        //https://developer.android.com/reference/android/bluetooth/BluetoothGattCallback#onCharacteristicChanged(android.bluetooth.BluetoothGatt,%20android.bluetooth.BluetoothGattCharacteristic,%20byte[])
+        try {
+            BluetoothGattCallback.onCharacteristicChanged
+                .overload('android.bluetooth.BluetoothGatt', 'android.bluetooth.BluetoothGattCharacteristic', '[B')
+                .implementation = function (gatt, characteristic, value) {
+                    var uuid = characteristic.getUuid();
+                    var data = bytes2hex(value);
+                    console.log(Color.Cyan + "[BLE Notify <=]" + " UUID: " + uuid.toString() + Color.Reset + " data: 0x" + data + Color.Light.Blue);
+                    return this.onCharacteristicChanged(gatt, characteristic, value);
+                };
+        } catch (error) {
+            // Code that runs if an error happens
+            console.error("Unable to implement writeCharacteristic with characteristic:", error.message);
+        }
     }); // end perform
-} else if (ObjC.available) {
-    Interceptor.attach(ObjC.classes.CBPeripheral['- writeValue:forCharacteristic:type:'].implementation, {
-        onEnter: function (args) {
-            var data = new ObjC.Object(args[2]);
-            var CBChar = new ObjC.Object(args[3]);
-            var dataBytes = Memory.readByteArray(data.bytes(), data.length());
-            var b = new Uint8Array(dataBytes);
-            var hexData = "";
-            for (var i = 0; i < b.length; i++) {
-                hexData += pad(b[i].toString(16), 2);
-            }
-            console.log(Color.Green + "[BLE Write  =>]" + Color.Light.Black + " UUID: " + CBChar.$ivars['_UUID'] + Color.Reset + " data: 0x" + hexData);
-        }
-    }); //end Interceptor
-    Interceptor.attach(ObjC.classes.CBCharacteristic['- value'].implementation, {
-        onEnter: function (args) {
-            var CBChar = new ObjC.Object(args[0]);
-            // turns <12 34> into 1234
-            var data = CBChar.$ivars['_value']
-            if (data != null) {
-                data = data.toString().replace(/ /g, '').slice(1, -1)
-            }
-            if (CBChar.$ivars['_isNotifying'] === true) {
-                console.log(Color.Cyan + "[BLE Notify <=]" + Color.Light.Black + " UUID: " + CBChar.$ivars['_UUID'] + Color.Reset + " data: 0x" + data);
-            }
-            else {
-                console.log(Color.Blue + "[BLE Read   <=]" + Color.Light.Black + " UUID: " + CBChar.$ivars['_UUID'] + Color.Reset + " data: 0x" + data);
-            }
-        }
-    }); //end Interceptor 
-};
+}
+
 var Color = {
     Reset: "\x1b[39;49;00m",
     Black: "\x1b[30;01m", Blue: "\x1b[34;01m", Cyan: "\x1b[36;01m", Gray: "\x1b[37;11m",
@@ -138,4 +127,71 @@ function pad(num, size) {
     var s = num + "";
     while (s.length < size) s = "0" + s;
     return s;
+}
+
+// Pure-JS UTF-8 decoder (works in Frida)
+function bytesToUtf8(input) {
+  if (!input) return "";
+
+  // normalize to Uint8Array
+  var bytes;
+  if (input instanceof ArrayBuffer) {
+    bytes = new Uint8Array(input);
+  } else if (input instanceof Uint8Array) {
+    bytes = input;
+  } else if (Array.isArray(input)) {
+    bytes = new Uint8Array(input);
+  } else {
+    // try to treat as Array-like
+    bytes = new Uint8Array(input);
+  }
+
+  var out = "";
+  var i = 0;
+
+  function cpToStr(cp) {
+    if (cp <= 0xFFFF) return String.fromCharCode(cp);
+    // produce surrogate pair
+    cp -= 0x10000;
+    return String.fromCharCode((cp >> 10) + 0xD800, (cp & 0x3FF) + 0xDC00);
+  }
+
+  while (i < bytes.length) {
+    var b1 = bytes[i];
+
+    if (b1 < 0x80) {
+      // 1-byte (ASCII)
+      out += String.fromCharCode(b1);
+      i++;
+    } else if ((b1 & 0xE0) === 0xC0) {
+      // 2-byte
+      if (i + 1 >= bytes.length) break; // truncated
+      var b2 = bytes[i + 1];
+      var cp = ((b1 & 0x1F) << 6) | (b2 & 0x3F);
+      out += cpToStr(cp);
+      i += 2;
+    } else if ((b1 & 0xF0) === 0xE0) {
+      // 3-byte
+      if (i + 2 >= bytes.length) break; // truncated
+      var b2 = bytes[i + 1], b3 = bytes[i + 2];
+      var cp = ((b1 & 0x0F) << 12) | ((b2 & 0x3F) << 6) | (b3 & 0x3F);
+      out += cpToStr(cp);
+      i += 3;
+    } else if ((b1 & 0xF8) === 0xF0) {
+      // 4-byte
+      if (i + 3 >= bytes.length) break; // truncated
+      var b2 = bytes[i + 1], b3 = bytes[i + 2], b4 = bytes[i + 3];
+      var cp = ((b1 & 0x07) << 18) |
+               ((b2 & 0x3F) << 12) |
+               ((b3 & 0x3F) << 6) |
+               (b4 & 0x3F);
+      out += cpToStr(cp);
+      i += 4;
+    } else {
+      // invalid leading byte — skip
+      i++;
+    }
+  }
+
+  return out;
 }

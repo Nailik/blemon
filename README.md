@@ -6,14 +6,18 @@ The standalone script can be used directly with [Frida](https://www.frida.re) in
 ## Usage
 - `adb root`
 - `adb shell "/data/local/tmp/frida-server &"`
-- `frida -U -l blemon_2.js -f your.package`
+- `frida -U -l blemon.js -f your.package`
+
+If you see now output the app probably implements `android.bluetooth.BluetoothGattCallback`, in order to find the implementation use
+- `frida -U -l blegatt.js -f your.package`
+
+and then change this line in blemon.js to the found implementation class
+`var BluetoothGattCallback = Java.use("android.bluetooth.BluetoothGattCallback")`
 
 ## Screenshots
 ![android_plugin](images/android_plugin.png)
 BLE Monitor script being run on Android as an Objection Plugin while monitoring a BLE enabled garage door opener app.
 
-![ios_frida](images/ios_frida.png)
-BLE Monitor script being run directly in Frida on iOS while monitoring a BLE enabled padlock app.
 ## Features
 - Automatically detects target operating system (iOS or Android) and runs appropriate hooks
 - Designed to be universal so that BLE events can be monitored regardless of the application code
