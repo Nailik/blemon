@@ -1,7 +1,9 @@
+const LOG_DEPRECATED = false
+const LOG_AS_TEXT = true
+    
 if (Java.available) {
 
     Java.perform(function () {
-
     var BluetoothGatt = Java.use("android.bluetooth.BluetoothGatt");
     var BluetoothGattCallback = Java.use("android.bluetooth.BluetoothGattCallback")
        // Hook BluetoothDevice.connectGatt overloads to capture callbacks passed as args
@@ -15,8 +17,10 @@ if (Java.available) {
                 .overload('android.bluetooth.BluetoothGattCharacteristic')
                 .implementation = function (characteristic) {
                     var uuid = characteristic.getUuid();
-                    var data = bytes2hex(characteristic.getValue());
-                    console.log(Color.Green + "[BLE Write (deprecated) =>]" + " UUID: " + uuid.toString() + Color.Reset + " data: 0x " + data);
+                    var data = bytesToUtf8(characteristic.getValue());
+                    if(LOG_DEPRECATED) {
+                        console.log(Color.Green + "[BLE Write (deprecated) =>]" + " UUID: " + uuid.toString() + Color.Reset + " data: 0x " + data);
+                    }
                     return this.writeCharacteristic(characteristic);
                 };
         } catch (error) {
@@ -30,7 +34,7 @@ if (Java.available) {
                 .overload('android.bluetooth.BluetoothGattCharacteristic', '[B', 'int')
                 .implementation = function (characteristic, value, writeType) {
                     var uuid = characteristic.getUuid();
-                    var data = bytes2hex(value);
+                    var data = bytesToUtf8(value);
                     console.log(Color.Green + "[BLE Write =>]" + " UUID: " + uuid.toString() + Color.Reset + " data: 0x " + data + " | writeType : " + writeType);
                     return this.writeCharacteristic(characteristic, value, writeType);
                 };
@@ -45,7 +49,7 @@ if (Java.available) {
             .overload('android.bluetooth.BluetoothGatt', 'android.bluetooth.BluetoothGattCharacteristic', '[B', 'int')
             .implementation = function (gatt, characteristic, value, status) {
                 var uuid = characteristic.getUuid();
-                var data = bytes2hex(value);
+                var data = bytesToUtf8(value);
                 console.log(Color.Blue + "[BLE Read <=]" + " UUID: " + uuid.toString() + Color.Reset + " data: 0x " + data); 
                 return this.onCharacteristicRead(gatt, characteristic, value, status);
             };
@@ -61,8 +65,10 @@ if (Java.available) {
                 .overload('android.bluetooth.BluetoothGatt', 'android.bluetooth.BluetoothGattCharacteristic', 'int')
                 .implementation = function (gatt, characteristic, status) {
                     var uuid = characteristic.getUuid();
-                    var data = bytes2hex(characteristic.getValue());
-                    console.log(Color.Blue + "[BLE Read (deprecated) <=]" + " UUID: " + uuid.toString() + Color.Reset + " data: 0x " + data);
+                    var data = bytesToUtf8(characteristic.getValue());
+                    if(LOG_DEPRECATED) {
+                        console.log(Color.Blue + "[BLE Read (deprecated) <=]" + " UUID: " + uuid.toString() + Color.Reset + " data: 0x " + data);
+                    }
                     return this.onCharacteristicRead(gatt, characteristic, status);
                 };
         } catch (error) {
@@ -77,8 +83,10 @@ if (Java.available) {
                 .overload('android.bluetooth.BluetoothGatt', 'android.bluetooth.BluetoothGattCharacteristic')
                 .implementation = function (gatt, characteristic) {
                     var uuid = characteristic.getUuid();
-                    var data = bytes2hex(characteristic.getValue());
-                    console.log(Color.Cyan + "[BLE Notify (deprecated) <=]" + " UUID: " + uuid.toString() + Color.Reset + " data: 0x" + data + Color.Light.Blue);
+                    var data = bytesToUtf8(characteristic.getValue());
+                    if(LOG_DEPRECATED) {
+                        console.log(Color.Cyan + "[BLE Notify (deprecated) <=]" + " UUID: " + uuid.toString() + Color.Reset + " data: 0x" + data + Color.Light.Blue);
+                    }
                     return this.onCharacteristicChanged(gatt, characteristic);
                 };
         } catch (error) {
@@ -92,7 +100,7 @@ if (Java.available) {
                 .overload('android.bluetooth.BluetoothGatt', 'android.bluetooth.BluetoothGattCharacteristic', '[B')
                 .implementation = function (gatt, characteristic, value) {
                     var uuid = characteristic.getUuid();
-                    var data = bytes2hex(value);
+                    var data = bytesToUtf8(value);
                     console.log(Color.Cyan + "[BLE Notify <=]" + " UUID: " + uuid.toString() + Color.Reset + " data: 0x" + data + Color.Light.Blue);
                     return this.onCharacteristicChanged(gatt, characteristic, value);
                 };
@@ -112,86 +120,85 @@ var Color = {
         Green: "\x1b[32;11m", Purple: "\x1b[35;11m", Red: "\x1b[31;11m", Yellow: "\x1b[33;11m"
     }
 };
-// thanks: https://awakened1712.github.io/hacking/hacking-frida/
-function bytes2hex(bytes) {
-        if (!bytes) return "";
-        var result = [];
-        for (var i = 0; i < bytes.length; i++) {
-            var byte = (bytes[i] & 0xFF).toString(16);
-            if (byte.length === 1) byte = "0" + byte;
-            result.push(byte);
-        }
-        return result.join(" "); // whitespace between bytes
+
+function convertOutput(bytes) {
+    if(LOG_AS_TEXT) {
+        return bytes2utf8Partial(bytes)
+    } else {
+        return bytes2hex(input);
     }
-function pad(num, size) {
-    var s = num + "";
-    while (s.length < size) s = "0" + s;
-    return s;
 }
 
-// Pure-JS UTF-8 decoder (works in Frida)
-function bytesToUtf8(input) {
-  if (!input) return "";
+// thanks: https://awakened1712.github.io/hacking/hacking-frida/
 
-  // normalize to Uint8Array
-  var bytes;
-  if (input instanceof ArrayBuffer) {
-    bytes = new Uint8Array(input);
-  } else if (input instanceof Uint8Array) {
-    bytes = input;
-  } else if (Array.isArray(input)) {
-    bytes = new Uint8Array(input);
-  } else {
-    // try to treat as Array-like
-    bytes = new Uint8Array(input);
-  }
+function bytes2utf8Partial(bytes) {
+    if (!bytes || bytes.length === 0) return "";
 
-  var out = "";
-  var i = 0;
+    const u8 = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+    let result = "";
+    let i = 0;
 
-  function cpToStr(cp) {
-    if (cp <= 0xFFFF) return String.fromCharCode(cp);
-    // produce surrogate pair
-    cp -= 0x10000;
-    return String.fromCharCode((cp >> 10) + 0xD800, (cp & 0x3FF) + 0xDC00);
-  }
+    while (i < u8.length) {
+        let byte = u8[i];
 
-  while (i < bytes.length) {
-    var b1 = bytes[i];
+        // ASCII (single-byte UTF-8)
+        if (byte <= 0x7F) {
+            result += String.fromCharCode(byte);
+            i++;
+            continue;
+        }
 
-    if (b1 < 0x80) {
-      // 1-byte (ASCII)
-      out += String.fromCharCode(b1);
-      i++;
-    } else if ((b1 & 0xE0) === 0xC0) {
-      // 2-byte
-      if (i + 1 >= bytes.length) break; // truncated
-      var b2 = bytes[i + 1];
-      var cp = ((b1 & 0x1F) << 6) | (b2 & 0x3F);
-      out += cpToStr(cp);
-      i += 2;
-    } else if ((b1 & 0xF0) === 0xE0) {
-      // 3-byte
-      if (i + 2 >= bytes.length) break; // truncated
-      var b2 = bytes[i + 1], b3 = bytes[i + 2];
-      var cp = ((b1 & 0x0F) << 12) | ((b2 & 0x3F) << 6) | (b3 & 0x3F);
-      out += cpToStr(cp);
-      i += 3;
-    } else if ((b1 & 0xF8) === 0xF0) {
-      // 4-byte
-      if (i + 3 >= bytes.length) break; // truncated
-      var b2 = bytes[i + 1], b3 = bytes[i + 2], b4 = bytes[i + 3];
-      var cp = ((b1 & 0x07) << 18) |
-               ((b2 & 0x3F) << 12) |
-               ((b3 & 0x3F) << 6) |
-               (b4 & 0x3F);
-      out += cpToStr(cp);
-      i += 4;
-    } else {
-      // invalid leading byte — skip
-      i++;
+        // Determine UTF-8 sequence length
+        let len =
+            byte >= 0xC2 && byte <= 0xDF ? 2 :
+            byte >= 0xE0 && byte <= 0xEF ? 3 :
+            byte >= 0xF0 && byte <= 0xF4 ? 4 :
+            0;
+
+        if (len === 0 || i + len > u8.length) {
+            // Invalid start byte
+            result += byte.toString(16).padStart(2, "0");
+            i++;
+            continue;
+        }
+
+        // Validate continuation bytes
+        let valid = true;
+        for (let j = 1; j < len; j++) {
+            if ((u8[i + j] & 0xC0) !== 0x80) {
+                valid = false;
+                break;
+            }
+        }
+
+        if (!valid) {
+            result += byte.toString(16).padStart(2, "0");
+            i++;
+            continue;
+        }
+
+        // Decode valid UTF-8 sequence
+        try {
+            const slice = u8.slice(i, i + len);
+            const char = new TextDecoder("utf-8", { fatal: true }).decode(slice);
+            result += char;
+            i += len;
+        } catch {
+            result += byte.toString(16).padStart(2, "0");
+            i++;
+        }
     }
-  }
 
-  return out;
+    return result;
+}
+
+function bytes2hex(bytes) {
+    if (!bytes) return "";
+    var result = [];
+    for (var i = 0; i < bytes.length; i++) {
+        var byte = (bytes[i] & 0xFF).toString(16);
+        if (byte.length === 1) byte = "0" + byte;
+        result.push(byte);
+    }
+    return result.join(" ");
 }
